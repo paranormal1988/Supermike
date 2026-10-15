@@ -73,7 +73,7 @@ body{
 .rbtn{position:absolute;width:var(--btn,72px);display:flex;flex-direction:column;align-items:center;gap:8px}
 .rbtn .cap{
   width:var(--btn,72px);height:var(--btn,72px);border-radius:50%;
-  display:flex;align-items:center;justify-content:center;font-size:9px;letter-spacing:.06em;
+  display:flex;align-items:center;justify-content:center;font-size:calc(var(--btn,72px) * .16);letter-spacing:.06em;
 }
 #bA{right:0;bottom:0}
 #bB{left:0;top:0}
@@ -637,7 +637,7 @@ const LEVELS = [
     time: 280, map: 'g14 ec6 ec8 g6 b9:!B!B g8 eb4 p3 g6 ec2 es4 g8 _4 g6 b9:BBBBBBB b5:-o-o-o- ec2 ec5 g10 es2 es4 eb8 g6 p2 g3 p3 eb2 g3 p4 g6 ec2 ec4 es7 g10 u3 _3 d3 eb2 eb6 b9:!-H-! g8 _2 g3 _3 g3 _3 g8 es2 ec5 eb6 b9:BBBB b5:B!!B g10 eb3 eb7 u6 h2:6 _3 g4 ec3 es5 ec8 g10 E' },
   { name: 'OLD CASTLE', theme: 'castle', final: true,
     line: "THANK YOU MIKE! YOU BEAT ANOMALOS NEKTARIOS AND SAVED ME. BEST FRIEND EVER. LET'S GO HOME!", reply: "ANYTIME, KYPRIANOS!",
-    time: 340, map: 'g10 h3:3 g2 _3 ec2 g6 f9:6 g8 h2:2 _3 h2:2 es1 g4 eb3 ec2 g6 f6:4 b9:XXXXX es5 g8 _4 eb3 g6 es3 eb5 g6 f9:6 g6 ec3 g4 _3 h2:3 _3 h2:4 _3 g6 eb2 eb5 es3 f10:4 g8 f9:6 eb4 g8 es2 es5 g6 _3 g3 _4 eb2 g3 _3 ec3 ec5 g8 b9:H g4 f8:5 es6 eb8 g10 _3 ec2 es5 g8 _3 g2 b9:-H g10 Z g3 E' }
+    time: 340, map: 'g10 h3:3 g2 _3 ec2 g6 f9:6 g8 h2:2 _3 h2:2 es1 g4 eb3 ec2 g6 f6:4 b9:XXXXX es5 g8 _4 eb3 g6 es3 eb5 g6 f9:6 g6 ec3 g4 _3 h2:3 _3 h2:4 _3 g6 eb2 eb5 es3 f10:4 g8 f9:6 eb4 g8 es2 es5 g6 _3 g3 _4 eb2 g3 _3 ec3 ec5 g8 g4 f8:5 es6 eb8 g10 _3 ec2 es5 g8 _3 g2 b9:-H g10 Z g3 E' }
 ];
 
 function rng(seed) {
@@ -707,7 +707,7 @@ function makeDeco(L) {
 let VW = 256;
 const GROW_T = 112;               // length of the bong scene in frames                      // visible width in game pixels (height is always 240)
 const G = { state: 'title', t: 0, level: 0, lives: 3, score: 0, coins: 0, grow: 0, growKind: 'big', dmt: 0, banner: 0, time: 300, tt: 0,
-  camX: 0, lv: null, menu: 0, unlocked: false, modal: false, timer: 0, phase: 0, cp: false, paused: false, best: 0, reached: 0, tiles: null, scen: null, flash: 0 };
+  camX: 0, lv: null, menu: 0, pmenu: 0, unlocked: false, modal: false, timer: 0, phase: 0, cp: false, paused: false, best: 0, reached: 0, tiles: null, scen: null, flash: 0 };
 const M = { x: 0, y: 0, w: 12, h: 15, vx: 0, vy: 0, face: 1, ground: false, anim: 0, inv: 0, fireCd: 0, throwT: 0, dead: false, jbuf: 0, coyote: 0, combo: 0, big: false };
 const NK = { x: 0, y: 0, face: -1, vx: 0, anim: 0, gone: false };
 let enemies = [], items = [], shots = [], parts = [], pops = [], bumps = [], boss = null, bflames = [];
@@ -927,6 +927,7 @@ function checkFlag() {
   const hgt = 192 - (M.y + M.h);
   const pts = hgt >= 128 ? 5000 : hgt >= 96 ? 2000 : hgt >= 64 ? 800 : hgt >= 32 ? 400 : 100;
   addScore(pts, P.x + 6, Math.round(M.y));
+  if (G.dmt > 0) { parts = parts.filter(q => q.k !== 'spark'); smoke(M.x + 6, M.y + 4, 6); } // DMT wears off at the flag, with a puff
   G.state = 'flag'; G.phase = 0; G.timer = 0; G.dmt = 0; G.banner = 0; stopMusic(); SFX.flag();
   M.vx = 0; M.vy = 0; M.x = P.x - M.w + 1; M.face = 1; M.throwT = 0;
   return true;
@@ -976,25 +977,29 @@ function updateBossFlames() {
   }
   bflames = bflames.filter(f => !f.gone);
 }
+// The lever only triggers once Mike is mostly over the solid ground it stands on (left edge at most 4px before it),
+// so when the bridge drops he is always standing on ground and can never fall.
 function checkLever() {
   const lv = G.lv.lever;
-  if (!lv || lv.pulled || M.dead || M.x + M.w <= lv.x || M.x >= lv.x + 16) return;
-  lv.pulled = true; SFX.lever();
-  if (boss && !boss.dead) { G.collapse = { i: G.lv.bridge.x1, t: 0 }; bflames = []; stopMusic(); M.vx = 0; }
+  if (!lv || lv.pulled || M.dead || M.x + 4 < lv.x || M.x >= lv.x + 16) return;
+  lv.pulled = true; SFX.lever(); bflames = []; stopMusic();
+  G.collapse = { i: G.lv.bridge.x1, t: 0 };
+  M.vx = 0; M.throwT = 0; G.dmt = 0; G.banner = 0;
+  G.state = 'outro'; G.phase = 0; G.timer = 0; // controls are locked from here on
 }
-function updateCollapse() {
-  const c = G.collapse, br = G.lv.bridge; c.t++;
-  if (c.t > 20 && c.t % 3 === 0 && c.i >= br.x0) { setTile(c.i, 13, 0); parts.push({ k: 'debris', x: c.i * 16 + 8, y: 210, vx: 0, vy: 0.5, t: 40 }); SFX.crumble(); c.i--; }
-  updateBoss(); updateFx();
-  if (c.i < br.x0 && (!boss || boss.dead) && c.t > 90) G.collapse = null;
-}
+
 
 'use strict';
 // ---------- State machine ----------
+function quitToMenu() { // from the pause menu
+  G.paused = false; if (AU.ctx) AU.ctx.resume(); stopMusic(); updateBest();
+  G.state = 'title'; G.timer = 0; G.menu = 0; G.dmt = 0; G.grow = 0; G.banner = 0; G.collapse = null; parts = []; setBig(false);
+  const b = document.getElementById('pauseBtn'); if (b) b.textContent = 'PAUSE';
+}
 function updateBest() { if (G.score > G.best) G.best = G.score; writeSave(); }
 function togglePause() {
-  if (!(G.state === 'play' || G.state === 'hug')) return;
-  G.paused = !G.paused;
+  if (!(G.state === 'play' || G.state === 'hug' || G.state === 'flag' || G.state === 'outro')) return;
+  G.paused = !G.paused; G.pmenu = 0;
   if (AU.ctx) { if (G.paused) AU.ctx.suspend(); else AU.ctx.resume(); }
   const b = document.getElementById('pauseBtn'); if (b) b.textContent = G.paused ? 'PLAY' : 'PAUSE';
 }
@@ -1013,12 +1018,12 @@ function step() {
       break;
     case 'play':
       if (G.grow > 0) { updateGrow(); break; }
-      if (G.collapse) { updateCollapse(); break; }
       updateMike();
       if (G.state !== 'play') break;
       updateWorld(); updateCamera();
       if (checkFlag()) break;
       checkLever();
+      if (G.state !== 'play') break;
       if (G.banner > 0) G.banner--;
       if (G.dmt > 0) {
         G.dmt--;
@@ -1036,9 +1041,10 @@ function step() {
       break;
     case 'hug': updateHug(); break;
     case 'flag': updateFlag(); break;
+    case 'outro': updateOutro(); break;
     case 'gameover':
       G.timer++;
-      if (G.timer > 60) { if (IN.jumpP) { SFX.start(); startGame(G.level); } else if (IN.fireP) { G.state = 'title'; G.timer = 0; G.menu = 0; } }
+      if (G.timer > 210 || (G.timer > 60 && (IN.jumpP || IN.fireP))) { G.state = 'title'; G.timer = 0; G.menu = 0; parts = []; }
       break;
     case 'ending':
       G.timer++;
@@ -1058,6 +1064,20 @@ function updateGrow() {
   if (ci >= 0) { const sp = [[-30, 2], [24, -10], [-2, -26]][ci]; parts.push({ k: 'cough', x: M.x + 6 + sp[0], y: M.y + sp[1], t: 56 }); SFX.cough(); }
   updateFx();
   if (G.grow === 0) { if (G.growKind === 'dmt') { G.dmt = 600; G.banner = 100; G.bannerText = 'DMT MIKE!'; playMusic('dmt'); } else setBig(true); }
+}
+
+// After the lever: the bridge crumbles away under the boss, then Mike walks to Kyprianos on his own.
+function updateOutro() {
+  G.timer++; const c = G.collapse, br = G.lv.bridge;
+  M.vx = 0; M.vy = Math.min(M.vy + 0.55, 6); moveY(M);          // gravity only: he lands on the lever's solid ground
+  if (G.phase === 0) {
+    if (G.timer > 20 && G.timer % 3 === 0 && c.i >= br.x0) { setTile(c.i, 13, 0); parts.push({ k: 'debris', x: c.i * 16 + 8, y: 210, vx: 0, vy: 0.5, t: 40 }); SFX.crumble(); c.i--; }
+    if (c.i < br.x0 && (!boss || boss.dead) && G.timer > 90) { G.phase = 1; G.timer = 0; }
+  } else if (M.ground && G.timer > 20) {
+    M.vx = 1.2; M.face = 1; moveX(M); M.anim += M.vx * 0.07; updateCamera();
+    if (M.x + M.w >= NK.x - 1) { G.state = 'hug'; G.phase = 0; G.timer = 0; M.vx = 0; }
+  }
+  updateBoss(); updateFx();
 }
 
 function updateFlag() {
@@ -1159,7 +1179,7 @@ function draw() {
   else if (s === 'gameover') drawGameOver();
   else if (s === 'ending') drawEnding();
   else { drawWorld(); drawHUD(); if (s === 'hug') drawHugUI(); if (G.banner > 0 && s === 'play') { const bt = G.bannerText || 'DMT MIKE!'; txt(bt, VW / 2, boss && !boss.dead ? 84 : 58, bt === 'DMT MIKE!' ? 'hsl(' + ((G.t * 12) % 360) + ',100%,65%)' : '#f8d030', 'center', bt.length * 16 <= VW - 16 ? 16 : 8); } }
-  if (G.paused) { ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(0, 0, VW, 240); txt('PAUSED', VW / 2, 104, '#f8d030', 'center', 16); txt('TAP PLAY TO KEEP GOING', VW / 2, 132, '#fff', 'center'); }
+  if (G.paused) { ctx.fillStyle = 'rgba(0,0,0,.6)'; ctx.fillRect(0, 0, VW, 240); txt('PAUSED', VW / 2, 80, '#f8d030', 'center', 16); drawMenu(pauseItems(), 112); }
 }
 
 function drawScenery(L, cam) {
@@ -1380,13 +1400,15 @@ function titleItems() {
   return a;
 }
 function selectItems() { return LEVELS.map((l, i) => ({ id: 'L' + i, label: (i + 1) + ' ' + l.name })).concat([{ id: 'back', label: 'BACK' }]); }
-function menuItems() { return G.state === 'select' ? selectItems() : titleItems(); }
-function menuY(i) { return G.state === 'select' ? 70 + i * 16 : 118 + i * 12; }
+function pauseItems() { return [{ id: 'resume', label: 'CONTINUE' }, { id: 'quit', label: 'MAIN MENU' }]; }
+function menuItems() { return G.paused ? pauseItems() : G.state === 'select' ? selectItems() : titleItems(); }
+function menuY(i) { return G.paused ? 116 + i * 18 : G.state === 'select' ? 70 + i * 16 : 118 + i * 12; }
 function drawMenu(items, w) {
-  if (G.menu >= items.length) G.menu = items.length - 1;
+  const key = G.paused ? 'pmenu' : 'menu';
+  if (G[key] >= items.length) G[key] = items.length - 1;
   const left = Math.round(VW / 2 - w / 2);
   items.forEach((it, i) => {
-    const y = menuY(i), on = i === G.menu;
+    const y = menuY(i), on = i === G[key];
     if (on) { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(left - 14, y - 3, w + 22, 13); txt('>', left - 11, y, '#f8d030'); }
     txt(it.label, left, y, on ? '#f8d030' : '#ffffff');
   });
@@ -1427,7 +1449,7 @@ function drawGameOver() {
   ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VW, 240);
   txt('GAME OVER', VW / 2, 90, '#fff', 'center', 16);
   txt('SCORE ' + pad(G.score, 6), VW / 2, 120, '#d8d8e0', 'center');
-  if (G.timer > 60) { txt('JUMP: TRY LEVEL ' + (G.level + 1) + ' AGAIN', VW / 2, 150, '#f8d030', 'center'); txt('FIRE: TITLE SCREEN', VW / 2, 166, '#fff', 'center'); }
+  if (G.timer > 60) txt('BACK TO THE MENU...', VW / 2, 156, '#9a9aa6', 'center');
 }
 function drawEnding() {
   const th = THEMES.night;
@@ -1453,7 +1475,9 @@ const canvas = $('game'), elBL = $('bl'), elBR = $('br'), elA = $('bA'), elB = $
 
 // ---------- Menus: driven straight from touch/key events so the password keyboard can open ----------
 function menuAction(a, gy) {
-  if (G.modal || G.blocked || !(G.state === 'title' || G.state === 'select')) return;
+  if (G.modal || G.blocked) return;
+  if (G.paused) return pauseAction(a, gy);
+  if (!(G.state === 'title' || G.state === 'select')) return;
   const items = menuItems();
   if (G.menu >= items.length) G.menu = items.length - 1;
   if (a === 'prev') { G.menu = (G.menu + items.length - 1) % items.length; SFX.tick(); }
@@ -1467,6 +1491,15 @@ function menuAction(a, gy) {
     else if (G.state === 'title') activate(items[G.menu]); // tap anywhere else on the title = choose the highlighted option
   }
 }
+function pauseAction(a, gy) { // PAUSED: CONTINUE / MAIN MENU
+  const items = pauseItems(), n = items.length;
+  if (a === 'prev') G.pmenu = (G.pmenu + n - 1) % n;
+  else if (a === 'next') G.pmenu = (G.pmenu + 1) % n;
+  else if (a === 'back') pauseQueued = true;
+  else if (a === 'ok') choosePause(items[G.pmenu]);
+  else if (a === 'tap') { const i = items.findIndex((o, k) => Math.abs(gy - (menuY(k) + 4)) <= 9); if (i >= 0) { G.pmenu = i; choosePause(items[i]); } }
+}
+function choosePause(it) { if (it.id === 'resume') pauseQueued = true; else quitToMenu(); }
 function activate(it) {
   if (!it) return;
   if (it.id === 'start') { SFX.start(); startGame(0); }
@@ -1522,6 +1555,7 @@ addEventListener('keydown', e => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
   KEYS[e.code] = true;
+  if (G.paused) { if (e.code === 'KeyP') pauseQueued = true; else if (MENU_KEYS[e.code]) menuAction(MENU_KEYS[e.code]); return; }
   if ((G.state === 'title' || G.state === 'select') && MENU_KEYS[e.code]) { menuAction(MENU_KEYS[e.code]); return; }
   if (e.code === 'Enter' || e.code === 'KeyP' || e.code === 'Escape') pauseQueued = true;
 });
@@ -1537,7 +1571,7 @@ function handleMini(el) {
 function inPw(t) { return t && t.closest && t.closest('#pw'); }
 function pressAt(x, y) { // a new finger/click: menus react immediately (inside the gesture)
   const z = zone(x, y);
-  if (G.state === 'title' || G.state === 'select') { if (z === 'C') menuAction('tap', toGameY(y)); else if (ZONE_MENU[z]) menuAction(ZONE_MENU[z]); }
+  if (G.paused || G.state === 'title' || G.state === 'select') { if (z === 'C') menuAction('tap', toGameY(y)); else if (ZONE_MENU[z]) menuAction(ZONE_MENU[z]); }
 }
 function onTouch(e) {
   for (const t of e.changedTouches) if (inPw(t.target)) return; // the code box handles its own taps (and the keyboard)
@@ -1595,8 +1629,13 @@ function layout() {
   const W = app.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0), H = app.clientHeight;
   const portrait = innerHeight > innerWidth;
   $('rotate').hidden = !portrait; G.blocked = portrait;
-  if (portrait && (G.state === 'play' || G.state === 'hug') && !G.paused) togglePause();
-  const side = Math.max(118, Math.min(200, W * 0.15)); // slimmer controller halves = bigger game screen
+  if (portrait && ['play', 'hug', 'flag', 'outro'].includes(G.state) && !G.paused) togglePause();
+  // Controls: start from the earlier sizes, then make them 1/3 bigger and widen the side strips to fit them.
+  const side0 = Math.max(118, Math.min(200, W * 0.15)), BIG = 4 / 3;
+  const btn = Math.round(Math.max(44, Math.min(86, (side0 - 12) / 2.4, H * 0.21)) * BIG);
+  const padW = Math.round(Math.max(50, Math.min(84, (side0 - 10) / 2)) * BIG);
+  const padH = Math.round(Math.min(Math.max(60, Math.min(padW / BIG * 1.4, H * 0.3)) * BIG, H * 0.42));
+  const side = Math.max(side0, padW * 2 + 12, btn * 2.35 + 14);
   let scale = H / 240, iw = Math.floor((W - 2 * side) / scale);
   if (iw < 256) { scale = Math.max(0.5, (W - 2 * side) / 256); iw = 256; }
   iw = Math.min(iw, 400); VW = iw;
@@ -1604,13 +1643,9 @@ function layout() {
   canvas.style.width = cw + 'px'; canvas.style.height = ch + 'px';
   PS = Math.max(1, Math.min(6, Math.round(scale * (window.devicePixelRatio || 1))));
   canvas.width = iw * PS; canvas.height = 240 * PS; curFont = 0; needDraw = true;
-  const sideW = (W - cw) / 2;
-  const btn = Math.max(44, Math.min(86, (sideW - 12) / 2.4, H * 0.21));
-  // left/right pad: each half uses nearly half the left strip and is taller than wide, so thumbs land on it easily
-  const padW = Math.max(50, Math.min(84, (sideW - 10) / 2)), padH = Math.max(60, Math.min(Math.round(padW * 1.4), H * 0.3));
   const rs = document.documentElement.style;
   rs.setProperty('--btn', btn + 'px'); rs.setProperty('--padw', padW + 'px'); rs.setProperty('--padh', padH + 'px');
-  const lift = Math.min(H * 0.16, 70) + 'px';
+  const lift = Math.max(0, Math.min(H * 0.12, 54, H / 2 - btn * 1.05 - 10)) + 'px'; // keep both controls fully on screen
   $('pad').style.marginTop = lift; $('acts').style.marginTop = lift;
   const cr = canvas.getBoundingClientRect(); R.cl = cr.left; R.cr = cr.right;
   const pr = $('pad').getBoundingClientRect(); R.padCx = pr.left + pr.width / 2;
@@ -1620,7 +1655,7 @@ function layout() {
 }
 addEventListener('resize', layout);
 addEventListener('orientationchange', () => setTimeout(layout, 120));
-document.addEventListener('visibilitychange', () => { if (document.hidden && (G.state === 'play' || G.state === 'hug') && !G.paused) togglePause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && ['play', 'hug', 'flag', 'outro'].includes(G.state) && !G.paused) togglePause(); });
 
 // ---------- Main loop: exactly 60 game steps per second ----------
 // Frame times are snapped to the display's refresh (60/120 Hz) so timing noise never causes a doubled or skipped step,
